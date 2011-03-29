@@ -1,0 +1,36 @@
+<html>
+<head>
+</head>
+<body>
+<h1>LogHistograms: A scalable data structure for gathering performance data.</h1>
+
+When gathering performance data, there are two common approaches:
+<ul>
+<li>Log individual events. This is a rich set of information, but the approach does not scale 
+beyond a modest set of metrics, because it consumes resources at a rate proportional 
+to the number of events being recorded.</li>
+<li>Periodically log statistics, say every minute. It scales just fine. However, 
+statistical data does not aggregate well; in particular, knowing the 95th percentile 
+over each minute does not tell you much about the 95th percentile for a given hour. 
+Likewise, knowing the 95th percentile of a bank of 100 servers behind a load balancer 
+does not tell you much about the 95th percentile of the application overall. And none 
+of this tell you anything about, say, 99.9th percentile, unless you had the foresight 
+to instrument that, too. And what about the 99.999th?</li> 
+</ul>
+
+<p>The LogHistogram is a data structure aimed at a middle ground between these two. While
+having resource usage whose size bounded independently of the number of events recorded, 
+it keeps enough information to estimate any quantile value after the fact, and to be able to 
+aggregate similar data structures. The estimate is within 10% of its actual value; it is
+10% whether the value is .0000001 or 100000, and the estimate remains within 10% over any
+aggregation.</p>
+
+<p>The data structure is trivial: it is just a histogram with buckets representing ranges
+of values that increase exponentially. Aggregation of histograms is simply adding the counts
+of corresponding buckets.</p>
+
+<p>This code base contains the data structure and some simple utilities for accumulating and
+logging the data. The serialization consists of messages formatted in JSON. LogHistogramCalculator
+does the basic computation, but richer analysis tools will be available in a companion project.</p>
+
+</body>

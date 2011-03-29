@@ -1,0 +1,43 @@
+buildscript {
+    repositories { mavenCentral() }
+    purrpackageVersion = "0.7.2"
+    dependencies {
+        classpath "net.sourceforge.purrpackage:purrpackage-gradle-plugin:1.0"
+        classpath "net.sourceforge.purrpackage:maven-oss-gradle-plugin:1.0"
+    }
+}
+
+subprojects {
+    
+    apply plugin: 'java'
+    apply plugin: 'eclipse'
+//    apply plugin: 'maven-oss'
+    apply plugin: 'purrpackage'
+    
+//  apply plugin: 'code-quality'
+    //  checkstyleConfigFileName = "../$checkstyleConfigFileName"
+    
+    sourceCompatibility = 1.6
+    group = "com.johncroth.perfutil"
+    version = '0.1'
+    manifest.mainAttributes(
+                            'Implementation-Version': version
+                            )
+    
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+    
+    dependencies {
+        testCompile "org.testng:testng:5.14"
+    }
+    
+    test {
+        useTestNG();
+    }
+
+    project.convention.plugins.purrpackage.junitIncludes = [ "**/*JUnitTest.class" ]
+    project.convention.plugins.purrpackage.coveragePolicy = "coveragePolicy.js"
+
+}

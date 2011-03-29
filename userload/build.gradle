@@ -1,0 +1,5 @@
+dependencies {
+      compile project(':histo')
+      testCompile project(':testutil')      
+}
+
