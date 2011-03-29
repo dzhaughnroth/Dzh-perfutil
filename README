@@ -1,0 +1,12 @@
+Performance monitoring and testing utilities.
+
+testutil stuff
+
+histo Histograms with logarithmically sized buckets. They aggregate
+naturally and even when aggregated you will know percentiles within
+20% of their actual value.
+
+userload Load generator / user simulator
+
+
+
