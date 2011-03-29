@@ -11,14 +11,14 @@ subprojects {
     
     apply plugin: 'java'
     apply plugin: 'eclipse'
-//    apply plugin: 'maven-oss'
+    apply plugin: 'maven-oss'
     apply plugin: 'purrpackage'
     
 //  apply plugin: 'code-quality'
     //  checkstyleConfigFileName = "../$checkstyleConfigFileName"
     
     sourceCompatibility = 1.6
-    group = "com.johncroth.perfutil"
+    group = "com.johncroth.Dzh-perfutil"
     version = '0.1'
     manifest.mainAttributes(
                             'Implementation-Version': version

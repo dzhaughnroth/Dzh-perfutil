@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite hostname="plum" name="com.johncroth.util.testutil.BeanPropertiesTesterTest" tests="2" failures="0" timestamp="29 Mar 2011 04:22:55 GMT" time="0.262" errors="0">
-  <testcase name="testTester" time="0.071" classname="com.johncroth.util.testutil.BeanPropertiesTesterTest"/>
-  <testcase name="testUncovered" time="0.043" classname="com.johncroth.util.testutil.BeanPropertiesTesterTest"/>
-</testsuite>

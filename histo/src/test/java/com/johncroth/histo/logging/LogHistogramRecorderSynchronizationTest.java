@@ -1,3 +1,14 @@
+/**
+ * Perfutil -- https://github.com/dzhaughnroth/Dzh-perfutil 
+ * (C) 2011 John Charles Roth
+ *
+ * Perfutil is free software, licensed under the terms of the GNU GPL 
+ * Version 2 or, at your option, any later version. You should have 
+ * received a copy of the license with this file. See the above web address
+ * for more information, or contact the Free Software Foundation, Boston, MA. 
+ * It is distributed WITHOUT WARRANTY; without even the implied warranty of 
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
 package com.johncroth.histo.logging;
 
 
@@ -18,7 +29,7 @@ import com.johncroth.histo.logging.LogHistogramRecorder;
 
 public class LogHistogramRecorderSynchronizationTest extends Assert {
 	
-	static int threadCount = 30;
+	static int threadCount = 10;
 	LogHistogramRecorder rec;
 	ExecutorService exec;
 	Porker[] porkers;	
@@ -83,7 +94,7 @@ public class LogHistogramRecorderSynchronizationTest extends Assert {
 		int total = 0;
 		for ( Porker p : porkers ) {
 			assertNull( p.error, p.toString() );
-			assertTrue( p.count > 20000, "" + p.toString() );
+			assertTrue( p.count > 10000, "" + p.toString() );
 			total += p.count;
 		}
 		LogHistogramCalculator calc = new LogHistogramCalculator( rec.getHistogram( "foo" ) );
