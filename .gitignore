@@ -6,3 +6,4 @@ target
 .project
 .settings
 .gradle
+test-output
