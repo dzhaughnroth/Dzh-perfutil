@@ -1,5 +1,5 @@
 dependencies {
     compile files( "lib/json_simple-1.1.jar" )
-    testCompile "com.johncroth.perfutil:testutil:${version}"
+    testCompile "com.johncroth.Dzh-perfutil:testutil:${version}"
 }
 

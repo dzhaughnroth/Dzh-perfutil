@@ -19,7 +19,7 @@ subprojects {
     
     sourceCompatibility = 1.6
     group = "com.johncroth.Dzh-perfutil"
-    version = '0.1'
+    version = '0.2'
     manifest.mainAttributes(
                             'Implementation-Version': version
                             )
