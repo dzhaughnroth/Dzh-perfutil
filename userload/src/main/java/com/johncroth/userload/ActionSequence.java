@@ -17,8 +17,8 @@ public interface ActionSequence {
 	
 	Runnable nextAction();
 	
-	long nextDelay();
+	Long nextDelay();
 	
-	boolean isDone();
+	boolean hasNext();
 	
 }

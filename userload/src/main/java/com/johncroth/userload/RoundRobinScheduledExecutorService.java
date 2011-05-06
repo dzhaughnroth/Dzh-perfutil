@@ -75,12 +75,15 @@ public class RoundRobinScheduledExecutorService implements ScheduledExecutorServ
 	}
 
 	@Override
-	// TODO does not respect timeout.
 	public boolean awaitTermination(long timeout, TimeUnit unit)
 			throws InterruptedException {
 		boolean result = true;
+		long now = System.nanoTime();
+		long timeRemaining = unit.toNanos( timeout );
 		for( ScheduledExecutorService w : workers ) {
-			result = result && w.awaitTermination(timeout, unit);
+			result = result && w.awaitTermination(timeRemaining, TimeUnit.NANOSECONDS);
+			long elapsed = System.nanoTime() - now;
+			timeRemaining = Math.min( 1, timeout - elapsed );
 		}
 		return result;
 	}

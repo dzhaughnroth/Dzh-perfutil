@@ -12,157 +12,145 @@
 package com.johncroth.userload;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import com.johncroth.userload.ActionSequence;
-import com.johncroth.userload.ActionSequenceExecutor;
-import com.johncroth.userload.JavaUtilActionSequenceExecutor;
-import com.johncroth.userload.NaiveDelayGovernor;
-import com.johncroth.userload.ActionSequenceExecutor.ErrorHandler;
-import com.johncroth.userload.TestActionSequenceFactory.TestActionSequence;
+import com.johncroth.histo.logging.UnitTestEventRecorder;
+import com.johncroth.userload.ActionSequenceExecutor.CountingMonitor;
 
 
 public class ActionSequenceExecutorTest extends Assert {
-	
-	ActionSequenceExecutor exec;
+
+	JavaUtilActionSequenceExecutor exec;
 	
 	@BeforeMethod
 	public void setUp() throws Exception {
-		factory = new TestActionSequenceFactory();
-		exec = new JavaUtilActionSequenceExecutor(Executors
-				.newScheduledThreadPool(10));
-		factory.setDefaultTimesToRun(10);
-		factory.setDelayTime(10);
-		factory.setDelayDeviation(2);
+		ScheduledExecutorService ses = Executors.newScheduledThreadPool(2);
+		exec = new JavaUtilActionSequenceExecutor(ses);
+		assertSame(exec.getService(), ses);
+		c1.set(0);
+		c2.set(0);
+		// our monitor does nothing, expects nothing
+		exec.getMonitor().slept( null, 0, 0 );
+		exec.getMonitor().failed( null, null, null, 0 );
+		exec.getMonitor().completed( null, null, -1);
+		instanceCount.set( 0 );
+		runCount.set( 0 );
 	}
 
-	TestActionSequenceFactory factory;
-	
-	void assertAllInRange(String message, Collection<? extends Number> values, Number center,
-			Number deviation) {
-		for (Number n : values) {
-			assertEquals(center.doubleValue(), n.doubleValue(),
-					deviation.doubleValue(), message + ": " + values
-							+ " not all in range " + center + " " + deviation );
-		}
-	}
-
-	@Test
-	public void testOne() throws Exception {
-		TestActionSequence seq = factory.create();
-		exec.addActionSequence( seq );
-		Thread.sleep( 350 );
-		ArrayList<Long> rd = new ArrayList<Long>( seq.getRequestedDelays() );
-		assertAllInRange( "", rd, factory.getDelayTime(), factory.getDelayDeviation() );		
-		ArrayList<Long> md = new ArrayList<Long>( seq.getMeasuredDelays() );
-		assertAllInRange( "", rd, factory.getDelayTime(), 5 );
-		Collections.sort( md );
-		assertEquals( factory.getDelayTime(), md.get( 0 ), 4 );
-		assertEquals( factory.getDelayTime(), md.get( rd.size() - 1 ), 4 );		
-		
-		assertEquals( factory.getDelayTime(), rd.get( 0 ), 5 );
-		assertEquals( factory.getDelayTime(), rd.get( rd.size() - 1 ), 5 );
-		assertEquals( 10, seq.getTimesRun().size() );
-		assertEquals( 1, factory.getSequences().size() );
-		assertSame( seq, factory.getSequences().get( 0 ) );
-	}
-	
-	@Test
-	public void testTwenty() throws Exception {
-		for ( int i = 0; i < 20; i++ ) {
-			TestActionSequence seq = factory.create();
-			exec.addActionSequence( seq );
-			Thread.sleep( 3 );
-		}
-		Thread.sleep( 1500 );
-		for( TestActionSequence t : factory.getSequences()) {
-			assertEquals( 10, t.getTimesRun().size() );
-			assertAllInRange( "requestedDelays", t.getRequestedDelays(), factory.getDelayTime(), factory.getDelayDeviation() );
-			List<Long> dd = t.getDelayDiffs();
-			Collections.sort( dd );
-			assertAllInRange( "diffs", dd.subList(1, t.getDelayDiffs().size() - 2), 0, 5 );
-		}
-	}
-
-	@Test
-	public void testTwentySlower() throws Exception {
-		factory.setDelayTime(50);
-		factory.setDelayDeviation( 5 );
-		for (int i = 0; i < 20; i++) {
-			TestActionSequence seq = factory.create();
-			exec.addActionSequence(seq);
-			Thread.sleep(3);
-		}
-		Thread.sleep(8000);
-		for (TestActionSequence t : factory.getSequences()) {
-			assertEquals(10, t.getTimesRun().size());
-			assertAllInRange("requestedDelays", t.getRequestedDelays(), factory
-					.getDelayTime(), factory.getDelayDeviation());
-			assertAllInRange("diffs", t.getDelayDiffs().subList(1,
-					t.getDelayDiffs().size() - 2), 0, 5);
-		}
-	}
-	
-	static class PathologicalTestActionSequenceFactory extends TestActionSequenceFactory {
+	AtomicInteger c1 = new AtomicInteger();
+	AtomicInteger c2 = new AtomicInteger();
+	Runnable a1 = new Runnable() {
 		@Override
-		void doSleep( long millis ) throws InterruptedException {
-			throw new InterruptedException();
+		public void run() {
+			c1.getAndIncrement();
 		}
-				
-	}
+	};
 	
-	Throwable found;
+	Runnable a2 = new Runnable() {	
+		@Override
+		public void run() {
+			c2.getAndIncrement();
+			throw new RuntimeException();
+		}
+	};
+
+	void runThreeTimes() throws Exception {
+		ActionSeq seq1 = new ActionSeq( Seq.constant( a1 ), Seq.constant( 20L ) );
+		ActionSeq seq2 = new ActionSeq( Seq.constant( a2 ), Seq.constant( 20L ) );
+		exec.addActionSequence( seq1 );
+		exec.addActionSequence( seq2 );
+		Thread.sleep(35);
+		exec.shutdown();	
+		Thread.sleep( 20 );
+		assertTrue( exec.isShutdown() );
+	}
 	
 	@Test
-	public void testPathology() throws InterruptedException {
-		ScheduledExecutorService ses = Executors
-		.newScheduledThreadPool(1);
-		JavaUtilActionSequenceExecutor x = new JavaUtilActionSequenceExecutor( ses );
-		assertSame( ses, x.getService() );
-		
-		x.getErrorHandler().handleError( null, null );
-		assertNull( found );
-		ErrorHandler eh = new ErrorHandler() {
-			
-			@Override
-			public void handleError(ActionSequence seq, Throwable t) {
-				found = t;
-			}
-		};
-		x.setErrorHandler( eh );
-		assertSame( eh, x.getErrorHandler() );
-		assertTrue( x.delayGovernor instanceof NaiveDelayGovernor);
-		PathologicalTestActionSequenceFactory pfac = new PathologicalTestActionSequenceFactory();
-		pfac.setDelayTime( 10 );
-		pfac.setDelayDeviation( 2 );
-		x.addActionSequence( pfac.create() );
-		Thread.sleep( 20 );
-		assertNotNull( found );
-		x.shutdown();
-		Thread.sleep( 20 );
-		assertTrue( x.isShutdown() );
-		
-		ActionSequenceExecutor stupid = new ActionSequenceExecutor( new NaiveDelayGovernor() ) {
-
-			@Override
-			protected void schedule(Runnable r, long delay, TimeUnit unit) {
-			}
-			
-		};
-		
-		// unimplemented
-		stupid.shutdown();
-		assertFalse( stupid.isShutdown() );
-		
+	public void testWithTwoThreads() throws Exception {
+		runThreeTimes();
+		assertEquals( 3, c1.get() );
+		assertEquals( 3, c2.get() );
 	}
 
+	@Test
+	public void testMonitor() throws Exception {
+		UnitTestEventRecorder recorder = new UnitTestEventRecorder();
+		exec.setMonitor(new ActionSequenceExecutor.EventRecorderMonitor(
+				recorder, "foo"));
+		runThreeTimes();
+		assertEquals(3, c1.get());
+		assertEquals(3, c2.get());
+		assertEquals(12, recorder.getEvents().size());
+	}
+
+	
+	static AtomicInteger runCount = new AtomicInteger();
+	static AtomicInteger instanceCount = new AtomicInteger();
+	static class Dumb implements Runnable {
+		public Dumb() {
+			instanceCount.incrementAndGet();
+		}
+		@Override
+		public void run() {
+			runCount.incrementAndGet();
+		}
+		
+	};
+	
+	static class Counter extends ActionSeq {
+		public Counter() {
+			super( Seq.finite( Seq.generator( Dumb.class ), 1 ), 10L );
+		}
+	}
+	
+	@Test
+	public void testRamper() throws Exception {
+		CountingMonitor monitor = new CountingMonitor();
+		exec.setMonitor( monitor );
+		ActionSeq z = ActionSeq.ramper( 5, 100, Counter.class, exec);
+		exec.addActionSequence( z );
+		Thread.sleep( 10 );
+		for ( int i = 0; i < 5; i++ ) {
+			assertEquals( instanceCount.get(), i + 1 );
+			Thread.sleep( 100/5 );
+		}
+		Thread.sleep( 50 );
+		assertFalse( z.hasNext() );
+		assertEquals( 5, instanceCount.get() );
+		assertEquals( 5, runCount.get() );
+		assertEquals( 0, monitor.getFailed() );
+	}
+	
+	@Test
+	public void testUnusualRamperCases()throws Exception {
+		CountingMonitor monitor = new CountingMonitor();
+		exec.setMonitor( monitor );
+		assertEquals( 0, monitor.getFailed() );	
+		ActionSeq z = ActionSeq.ramper( 5, 100, Counter.class, null );
+		exec.addActionSequence( z );
+		Thread.sleep( 120 );
+		assertEquals( 5, monitor.getFailed() );	
+
+		List<ActionSequence> zero = new ArrayList<ActionSequence>();
+		ActionSeq y = ActionSeq.ramper( 2, 10, zero.iterator(), exec );
+		monitor = new CountingMonitor();
+		exec.setMonitor( monitor );
+		exec.addActionSequence( y );
+		Thread.sleep( 30 );
+		assertEquals( 2, monitor.getCompleted() );
+		assertEquals( 0, monitor.getFailed() );
+		assertEquals( 2, monitor.getSlept() );
+		assertTrue( monitor.toString().length() > 15 );
+		
+		
+	}
+	
+	
 }

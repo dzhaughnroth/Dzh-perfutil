@@ -17,11 +17,6 @@ import java.util.concurrent.TimeUnit;
 public class JavaUtilActionSequenceExecutor extends ActionSequenceExecutor {
 	
 	public JavaUtilActionSequenceExecutor( ScheduledExecutorService service ) {
-		this( new NaiveDelayGovernor(), service);
-	}
-
-	public JavaUtilActionSequenceExecutor( DelayGovernor guvnuh, ScheduledExecutorService service ) {
-		super( guvnuh );
 		this.service = service;
 	}
 
@@ -37,11 +32,13 @@ public class JavaUtilActionSequenceExecutor extends ActionSequenceExecutor {
 
 	@Override
 	public void shutdown() {
+		super.shutdown();
 		service.shutdown();
 	}
 	
 	@Override
 	public boolean isShutdown() {
+		super.isShutdown();
 		return service.isShutdown();
 	}
 }

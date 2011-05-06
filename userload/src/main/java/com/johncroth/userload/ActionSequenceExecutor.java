@@ -12,69 +12,25 @@
 package com.johncroth.userload;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import com.johncroth.histo.client.EventRecorder;
 
 public abstract class ActionSequenceExecutor {
-	
-	public static interface ErrorHandler {
-		void handleError( ActionSequence seq, Throwable t );
-	}
-	
-	public ActionSequenceExecutor( DelayGovernor guvnuh ) {
-		delayGovernor = guvnuh;
+
+	private volatile Monitor monitor = NOOP;
+
+	public void setMonitor( Monitor monitor ) {
+		this.monitor = monitor;
 	}
 
-	DelayGovernor delayGovernor;
-	ErrorHandler errorHandler = new ErrorHandler() {
-
-		@Override
-		public void handleError(ActionSequence seq, Throwable t) {
-		}
-		
-	};
-
-	public ErrorHandler getErrorHandler() {
-		return errorHandler;
+	public Monitor getMonitor( ) {
+		return monitor;
 	}
-
-	public void setErrorHandler(ErrorHandler errorHandler) {
-		this.errorHandler = errorHandler;
-	}
-
-	class Rescheduler implements Runnable {
-		long lastSched, intendedDelay, requestedDelay;
-		ActionSequence seq;
-		Rescheduler( ActionSequence seq, long delay ) {
-			this.seq = seq;
-			this.intendedDelay = delay;
-			this.requestedDelay = 0;
-			lastSched = System.nanoTime();
-		}
-
-		@Override
-		public void run() {
-			long actualDelay = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastSched );
-			delayGovernor.reportDelay( intendedDelay, requestedDelay, actualDelay ); 
-			try {
-				seq.nextAction().run();
-			}
-			catch( Throwable e ) {
-				errorHandler.handleError( seq, e );
-			}
-			if ( ! seq.isDone() ) { 
-				intendedDelay = seq.nextDelay();
-				requestedDelay = delayGovernor.recommendActualDelay( intendedDelay );
-				lastSched = System.nanoTime();
-				schedule( this, requestedDelay, TimeUnit.MILLISECONDS );
-			}
-		}
-
-	}
-
 
 	public void addActionSequence( ActionSequence seq ) {
-		long delay = delayGovernor.recommendActualDelay(seq.nextDelay());
-		Rescheduler r = new Rescheduler( seq, delay );
-		schedule( r, delay, TimeUnit.MILLISECONDS );
+		Rescheduler r = new Rescheduler( seq, 0 );
+		schedule( r, 0, TimeUnit.MILLISECONDS );
 	}
 
 	protected abstract void schedule( Runnable r, long delay, TimeUnit unit );
@@ -85,4 +41,138 @@ public abstract class ActionSequenceExecutor {
 	public boolean isShutdown() {
 		return false;
 	}
+	
+	class Rescheduler implements Runnable {
+		long lastSched, intendedDelay;
+		ActionSequence seq;
+		Rescheduler( ActionSequence seq, long delay ) {
+			this.seq = seq;
+			this.intendedDelay = delay;
+			lastSched = System.nanoTime();
+		}
+
+		@Override
+		public void run() {
+			Monitor m = getMonitor();
+			long start = System.nanoTime();
+			long actualDelay = TimeUnit.NANOSECONDS.toMillis(start - lastSched );
+			m.slept(seq, intendedDelay, actualDelay);
+			Runnable r = seq.nextAction();
+			try {
+				r.run();
+				m.completed( seq, r, TimeUnit.NANOSECONDS.toMillis( System.nanoTime() - start ));
+			}
+			catch( Throwable e ) {
+				m.failed(seq, r, e, TimeUnit.NANOSECONDS.toMillis( System.nanoTime() - start ));
+			}
+			if ( seq.hasNext() ) { 
+				intendedDelay = seq.nextDelay();
+				lastSched = System.nanoTime();
+				schedule( this, intendedDelay, TimeUnit.MILLISECONDS );
+			}
+		}
+	}
+	
+	
+	/** Monitor methods will be invoked concurrently */
+	public static interface Monitor {
+
+		void failed( ActionSequence seq, Runnable action, Throwable e, long elpasedMillis );
+		
+		void completed( ActionSequence seq, Runnable action, long elapsedMillis );
+		
+		void slept( ActionSequence seq, long intendedAmount, long actualAmount );
+	}
+
+	public static class CountingMonitor implements Monitor {
+		AtomicInteger failed = new AtomicInteger();
+		AtomicInteger completed = new AtomicInteger();
+		AtomicInteger slept = new AtomicInteger();
+		
+		public int getFailed() {
+			return failed.get();
+		}
+		
+		public int getCompleted() {
+			return completed.get();
+		}
+		
+		public int getSlept() {
+			return slept.get();
+		}
+
+		@Override
+		public void failed(ActionSequence seq, Runnable action, Throwable e,
+				long elpasedMillis) {
+			failed.incrementAndGet();			
+		}
+
+		@Override
+		public void completed(ActionSequence seq, Runnable action,
+				long elapsedMillis) {
+			completed.incrementAndGet();			
+		}
+
+		@Override
+		public void slept(ActionSequence seq, long intendedAmount,
+				long actualAmount) {
+			slept.incrementAndGet();			
+		}
+		
+		@Override
+		public String toString() {
+			return( "Completed: " + getCompleted() + "; Failed: " + getFailed() + "; Slept: " + getSlept() );
+		}
+	}
+	
+	public static class EventRecorderMonitor implements Monitor {
+		public static final String FAILED = "-failed";
+		public static final String COMPLETED = "-completed";
+		public static final String SLEEP_DIFF = "-sleep-diff";
+		
+		public EventRecorderMonitor( EventRecorder recorder, String prefix ) {
+			this.recorder = recorder;
+			failedMsg = prefix + FAILED;
+			completedMsg = prefix + COMPLETED;
+			sleepDiffMsg = prefix + SLEEP_DIFF;
+		}
+
+		final EventRecorder recorder;
+		final String failedMsg, completedMsg, sleepDiffMsg;		
+		@Override
+		public void failed(ActionSequence seq, Runnable action, Throwable e,
+				long elapsedMillis) {
+			recorder.recordEvent( failedMsg, elapsedMillis ); 			
+		}
+
+		@Override
+		public void completed(ActionSequence seq, Runnable action,
+				long elapsedMillis) {
+			recorder.recordEvent( completedMsg, elapsedMillis );			
+		}
+
+		@Override
+		public void slept(ActionSequence seq, long intendedAmount,
+				long actualAmount) {
+			recorder.recordEvent(sleepDiffMsg,
+					Math.abs(actualAmount - intendedAmount));
+		}
+		
+	}
+	
+	static Monitor NOOP = new Monitor() {
+			
+		@Override
+		public void slept(ActionSequence seq, long intendedAmount, long actualAmount) {
+		}
+		
+		@Override
+		public void failed(ActionSequence seq, Runnable action, Throwable e, long elpasedMillis) {
+		}
+		
+		@Override
+		public void completed(ActionSequence seq, Runnable action, long elapsedMillis) {
+		}
+	};
+	
 }

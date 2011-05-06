@@ -69,11 +69,11 @@ public class GetPutActionSequence implements ActionSequence, Runnable {
 		return this; // todo
 	}
 	
-	public long nextDelay() {
-		return 100;
+	public Long nextDelay() {
+		return 100L;
 	}
 	
-	public boolean isDone() {
+	public boolean hasNext() {
 		return false;
 	}
 	
